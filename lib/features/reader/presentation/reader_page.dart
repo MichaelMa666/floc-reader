@@ -4,40 +4,76 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../shared/providers/app_providers.dart';
 
 class ReaderPage extends ConsumerWidget {
-  const ReaderPage({super.key});
+  const ReaderPage({
+    super.key,
+    required this.bookId,
+    required this.chapterId,
+  });
+
+  final String bookId;
+  final String chapterId;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final sourceIdAsync = ref.watch(bookSourceIdProvider(bookId));
+
+    return sourceIdAsync.when(
+      loading: () => const Scaffold(
+        body: Center(child: CircularProgressIndicator()),
+      ),
+      error: (e, _) => Scaffold(
+        appBar: AppBar(title: const Text('阅读')),
+        body: Center(child: Text('加载失败: $e')),
+      ),
+      data: (sourceId) => _ReaderContent(
+        sourceId: sourceId,
+        bookId: bookId,
+        chapterId: chapterId,
+      ),
+    );
+  }
+}
+
+class _ReaderContent extends ConsumerWidget {
+  const _ReaderContent({
+    required this.sourceId,
+    required this.bookId,
+    required this.chapterId,
+  });
+
+  final String sourceId;
+  final String bookId;
+  final String chapterId;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final contentAsync = ref.watch(
+      chapterContentProvider((
+        sourceId: sourceId,
+        bookId: bookId,
+        chapterId: chapterId,
+      )),
+    );
+
     return Scaffold(
-      appBar: AppBar(title: const Text('阅读器')),
-      body: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: <Widget>[
-            const Text(
-              '这是阅读器占位页。\n\n'
-              '后续会接入：翻页手势、长按设置 BottomSheet、阅读进度保存。',
-              style: TextStyle(fontSize: 16, height: 1.6),
-            ),
-            const SizedBox(height: 16),
-            FilledButton(
-              onPressed: () async {
-                await ref.read(readerProgressServiceProvider).save(
-                      bookId: 'demo_book',
-                      chapterId: 'demo_chapter_1',
-                      offset: 0,
-                    );
-                if (context.mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('已保存示例阅读进度')),
-                  );
-                }
-              },
-              child: const Text('保存阅读进度（占位流程）'),
-            ),
-          ],
+      appBar: AppBar(title: const Text('阅读')),
+      body: contentAsync.when(
+        loading: () => const Center(child: CircularProgressIndicator()),
+        error: (e, _) => Center(
+          child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: Text('加载失败: $e', textAlign: TextAlign.center),
+          ),
         ),
+        data: (content) {
+          return SingleChildScrollView(
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+            child: Text(
+              content,
+              style: const TextStyle(fontSize: 18, height: 1.8),
+            ),
+          );
+        },
       ),
     );
   }

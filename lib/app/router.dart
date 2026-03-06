@@ -7,8 +7,8 @@ import '../features/reader/presentation/reader_page.dart';
 
 class AppRoutes {
   static const bookshelf = '/';
-  static const catalog = '/catalog';
-  static const reader = '/reader';
+  static const catalog = '/catalog/:bookId';
+  static const reader = '/reader/:bookId/:chapterId';
 }
 
 final appRouter = GoRouter(
@@ -24,14 +24,17 @@ final appRouter = GoRouter(
       path: AppRoutes.catalog,
       name: 'catalog',
       builder: (BuildContext context, GoRouterState state) {
-        return const CatalogPage();
+        final bookId = state.pathParameters['bookId']!;
+        return CatalogPage(bookId: bookId);
       },
     ),
     GoRoute(
       path: AppRoutes.reader,
       name: 'reader',
       builder: (BuildContext context, GoRouterState state) {
-        return const ReaderPage();
+        final bookId = state.pathParameters['bookId']!;
+        final chapterId = state.pathParameters['chapterId']!;
+        return ReaderPage(bookId: bookId, chapterId: chapterId);
       },
     ),
   ],
