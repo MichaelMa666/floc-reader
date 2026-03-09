@@ -9,4 +9,14 @@ abstract class ReadingRepository {
   Future<ReadingProgress?> getReadingProgress(String bookId);
 
   Future<void> saveReadingProgress(ReadingProgress progress);
+
+  Future<Map<String, int>> getChapterReadPercents(String bookId);
+
+  Future<void> saveChapterReadPercent({
+    required String bookId,
+    required String chapterId,
+    required int percent,
+  });
+
+  Future<void> clearReadingProgress();
 }

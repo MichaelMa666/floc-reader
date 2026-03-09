@@ -109,7 +109,9 @@ class AppDatabase extends GeneratedDatabase {
   }
 
   Future<List<BookRow>> getAllBooks() async {
-    final rows = await customSelect('SELECT * FROM books ORDER BY created_at DESC').get();
+    final rows = await customSelect(
+      'SELECT * FROM books ORDER BY created_at DESC',
+    ).get();
     return rows.map(BookRow.fromRow).toList();
   }
 
@@ -130,7 +132,14 @@ class AppDatabase extends GeneratedDatabase {
         b.customStatement(
           'INSERT OR REPLACE INTO chapters (id, book_id, title, chapter_index, content, cached) '
           'VALUES (?, ?, ?, ?, ?, ?)',
-          [ch.id, ch.bookId, ch.title, ch.chapterIndex, ch.content, ch.cached ? 1 : 0],
+          [
+            ch.id,
+            ch.bookId,
+            ch.title,
+            ch.chapterIndex,
+            ch.content,
+            ch.cached ? 1 : 0,
+          ],
         );
       }
     });
@@ -168,6 +177,11 @@ class AppDatabase extends GeneratedDatabase {
       updates: {},
       updateKind: UpdateKind.update,
     );
+  }
+
+  Future<void> clearAllData() async {
+    await customStatement('DELETE FROM chapters');
+    await customStatement('DELETE FROM books');
   }
 }
 

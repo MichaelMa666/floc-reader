@@ -36,7 +36,6 @@ dependencies:
   cupertino_icons: ^1.0.8
   flutter_riverpod: ^3.2.1
   go_router: ^17.0.0
-  dio: ^5.9.2
   drift: ^2.31.0
   sqlite3_flutter_libs: ^0.5.41
   shared_preferences: ^2.5.3
@@ -46,7 +45,10 @@ dependencies:
   path_provider: ^2.1.5
   logger: ^2.6.2
   path: ^1.9.1
-  html: ^0.15.6
+  archive: ^4.0.9
+  xml: ^6.6.1
+  http: ^1.6.0
+  gbk_codec: ^0.4.0
 
 dev_dependencies:
   flutter_test:

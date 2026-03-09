@@ -2,7 +2,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:floc_reader/app/app.dart';
-import 'package:floc_reader/data/local/app_database.dart';
+import 'package:floc_reader/data/local/app_database_platform.dart';
 import 'package:floc_reader/shared/providers/app_providers.dart';
 
 void main() {
