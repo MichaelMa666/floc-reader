@@ -37,12 +37,18 @@ class BookRepository {
         (titleOverride != null && titleOverride.trim().isNotEmpty)
         ? titleOverride.trim()
         : parsed.title;
+    final coverPath = await _persistCover(
+      bookId: bookId,
+      bytes: parsed.coverBytes,
+      mediaType: parsed.coverMediaType,
+    );
     await db.upsertBook(
       id: bookId,
       sourceId: sourceId,
       title: resolvedTitle,
       author: parsed.author,
       description: parsed.description,
+      coverUrl: coverPath,
     );
 
     final chapterRows = parsed.chapters
@@ -83,11 +89,45 @@ class BookRepository {
 
     if (kIsWeb) return;
     final docsDir = await getApplicationDocumentsDirectory();
-    final booksDir = Directory(
-      p.join(docsDir.path, 'floc_reader_library', 'books'),
+    final libraryDir = Directory(
+      p.join(docsDir.path, 'floc_reader_library'),
     );
-    if (await booksDir.exists()) {
-      await booksDir.delete(recursive: true);
+    if (await libraryDir.exists()) {
+      await libraryDir.delete(recursive: true);
+    }
+  }
+
+  Future<String?> _persistCover({
+    required String bookId,
+    required Uint8List? bytes,
+    required String? mediaType,
+  }) async {
+    if (kIsWeb) return null;
+    if (bytes == null || bytes.isEmpty) return null;
+    final docsDir = await getApplicationDocumentsDirectory();
+    final coversDir = Directory(
+      p.join(docsDir.path, 'floc_reader_library', 'covers'),
+    );
+    await coversDir.create(recursive: true);
+    final extension = _extensionFromMediaType(mediaType);
+    final file = File(p.join(coversDir.path, '$bookId$extension'));
+    await file.writeAsBytes(bytes, flush: true);
+    return file.path;
+  }
+
+  String _extensionFromMediaType(String? mediaType) {
+    switch (mediaType?.toLowerCase().trim()) {
+      case 'image/jpeg':
+      case 'image/jpg':
+        return '.jpg';
+      case 'image/png':
+        return '.png';
+      case 'image/webp':
+        return '.webp';
+      case 'image/gif':
+        return '.gif';
+      default:
+        return '.img';
     }
   }
 
@@ -115,6 +155,9 @@ class BookRepository {
 
   /// 本地书籍列表
   Future<List<BookRow>> getLocalBooks() => db.getAllBooks();
+
+  /// 单本书籍
+  Future<BookRow?> getLocalBook(String id) => db.getBookById(id);
 
   /// 本地章节列表
   Future<List<ChapterRow>> getLocalChapters(String bookId) =>

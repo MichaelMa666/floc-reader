@@ -7,6 +7,8 @@ import '../../data/local/app_database_platform.dart';
 import '../../data/local/reading_preferences_store.dart';
 import '../../data/repositories/book_repository.dart';
 import '../../data/repositories/reading_repository_impl.dart';
+import '../../domain/entities/reading_config.dart';
+import '../../domain/entities/reading_progress.dart';
 import '../../domain/repositories/reading_repository.dart';
 import '../../domain/usecases/save_reading_progress_usecase.dart';
 import '../../features/import/data/library_sync_service_platform.dart';
@@ -70,6 +72,46 @@ final chapterReadPercentMapProvider = FutureProvider.family<Map<String, int>, St
 ) {
   final readingRepo = ref.watch(readingRepositoryProvider);
   return readingRepo.getChapterReadPercents(bookId);
+});
+
+final readingProgressProvider =
+    FutureProvider.family<ReadingProgress?, String>((ref, bookId) {
+  final readingRepo = ref.watch(readingRepositoryProvider);
+  return readingRepo.getReadingProgress(bookId);
+});
+
+class LastReadShortcut {
+  const LastReadShortcut({
+    required this.book,
+    required this.progress,
+    required this.chapterTitle,
+  });
+
+  final BookRow book;
+  final ReadingProgress progress;
+  final String chapterTitle;
+}
+
+final lastReadShortcutProvider =
+    FutureProvider<LastReadShortcut?>((ref) async {
+  final readingRepo = ref.watch(readingRepositoryProvider);
+  final progress = await readingRepo.getLatestReadingProgress();
+  if (progress == null) return null;
+  final bookRepo = ref.watch(bookRepositoryProvider);
+  final book = await bookRepo.getLocalBook(progress.bookId);
+  if (book == null) return null;
+  final chapter =
+      await bookRepo.getLocalChapter(progress.bookId, progress.chapterId);
+  return LastReadShortcut(
+    book: book,
+    progress: progress,
+    chapterTitle: chapter?.title ?? '',
+  );
+});
+
+final readingConfigProvider = FutureProvider<ReadingConfig>((ref) {
+  final readingRepo = ref.watch(readingRepositoryProvider);
+  return readingRepo.getReadingConfig();
 });
 
 final chapterContentProvider =

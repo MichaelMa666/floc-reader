@@ -26,6 +26,11 @@ class ReadingRepositoryImpl implements ReadingRepository {
   }
 
   @override
+  Future<ReadingProgress?> getLatestReadingProgress() {
+    return _store.getLatestReadingProgress();
+  }
+
+  @override
   Future<void> saveReadingConfig(ReadingConfig config) {
     return _store.saveReadingConfig(config);
   }

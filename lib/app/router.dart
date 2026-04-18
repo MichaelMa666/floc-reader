@@ -16,25 +16,27 @@ final appRouter = GoRouter(
     GoRoute(
       path: AppRoutes.bookshelf,
       name: 'bookshelf',
-      builder: (BuildContext context, GoRouterState state) {
-        return const BookshelfPage();
+      pageBuilder: (BuildContext context, GoRouterState state) {
+        return const NoTransitionPage(child: BookshelfPage());
       },
     ),
     GoRoute(
       path: AppRoutes.catalog,
       name: 'catalog',
-      builder: (BuildContext context, GoRouterState state) {
+      pageBuilder: (BuildContext context, GoRouterState state) {
         final bookId = state.pathParameters['bookId']!;
-        return CatalogPage(bookId: bookId);
+        return NoTransitionPage(child: CatalogPage(bookId: bookId));
       },
     ),
     GoRoute(
       path: AppRoutes.reader,
       name: 'reader',
-      builder: (BuildContext context, GoRouterState state) {
+      pageBuilder: (BuildContext context, GoRouterState state) {
         final bookId = state.pathParameters['bookId']!;
         final chapterId = state.pathParameters['chapterId']!;
-        return ReaderPage(bookId: bookId, chapterId: chapterId);
+        return NoTransitionPage(
+          child: ReaderPage(bookId: bookId, chapterId: chapterId),
+        );
       },
     ),
   ],

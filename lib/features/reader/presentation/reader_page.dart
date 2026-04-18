@@ -3,6 +3,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../data/local/app_database_platform.dart';
+import '../../../domain/entities/reading_config.dart';
+import '../../../domain/entities/reading_progress.dart';
 import '../../../shared/providers/app_providers.dart';
 
 class ReaderPage extends ConsumerWidget {
@@ -31,6 +33,11 @@ class _ReaderContentState extends ConsumerState<_ReaderContent> {
   static const EdgeInsets _pagePadding = EdgeInsets.fromLTRB(20, 10, 20, 0);
   static const TextStyle _bodyStyle = TextStyle(fontSize: 18, height: 1.8);
   static const double _paginationSafetyBottom = 0;
+  // 柔和护眼的米色底，替代系统默认的纯白。
+  static const Color _readerBackground = Color(0xFFF5EFDC);
+  static const Color _readerForeground = Color(0xFF2B2B2B);
+  static const Color _readerBackgroundNight = Color(0xFF1A1A1A);
+  static const Color _readerForegroundNight = Color(0xFFC8C8C8);
   static const StrutStyle _bodyStrut = StrutStyle(
     fontSize: 18,
     height: 1.8,
@@ -51,6 +58,7 @@ class _ReaderContentState extends ConsumerState<_ReaderContent> {
   bool _initialPercentLoaded = false;
   int _restoreToken = 0;
   bool _isChapterNavigating = false;
+  bool _menuVisible = false;
 
   @override
   void initState() {
@@ -96,11 +104,22 @@ class _ReaderContentState extends ConsumerState<_ReaderContent> {
 
   Future<void> _loadInitialPercent() async {
     final token = ++_restoreToken;
-    final map = await ref
-        .read(readingRepositoryProvider)
-        .getChapterReadPercents(widget.bookId);
+    final repo = ref.read(readingRepositoryProvider);
+    final map = await repo.getChapterReadPercents(widget.bookId);
     if (!mounted || token != _restoreToken) return;
     final percent = (map[widget.chapterId] ?? 0).clamp(0, 100);
+    // 记录当前阅读位置，供目录页的历史书签直接跳回。
+    await repo.saveReadingProgress(
+      ReadingProgress(
+        bookId: widget.bookId,
+        chapterId: widget.chapterId,
+        offset: percent,
+        updatedAt: DateTime.now(),
+      ),
+    );
+    if (!mounted || token != _restoreToken) return;
+    ref.invalidate(readingProgressProvider(widget.bookId));
+    ref.invalidate(lastReadShortcutProvider);
     setState(() {
       _initialPercent = percent;
       _initialPercentLoaded = true;
@@ -254,6 +273,44 @@ class _ReaderContentState extends ConsumerState<_ReaderContent> {
     _savePercent(enteredPercent);
   }
 
+  void _handleZoneTap(_TapZone zone, List<ChapterRow> chapters) {
+    if (_menuVisible) {
+      setState(() => _menuVisible = false);
+      return;
+    }
+    switch (zone) {
+      case _TapZone.left:
+        _goPrevPage(chapters);
+        break;
+      case _TapZone.middle:
+        setState(() => _menuVisible = true);
+        break;
+      case _TapZone.right:
+        _goNextPage(chapters);
+        break;
+    }
+  }
+
+  Future<void> _goPrevPage(List<ChapterRow> chapters) async {
+    final controller = _pageController;
+    if (controller == null) return;
+    if (_currentPage > 0) {
+      controller.jumpToPage(_currentPage - 1);
+      return;
+    }
+    await _goToAdjacentChapter(chapters, next: false);
+  }
+
+  Future<void> _goNextPage(List<ChapterRow> chapters) async {
+    final controller = _pageController;
+    if (controller == null) return;
+    if (_currentPage < _pages.length - 1) {
+      controller.jumpToPage(_currentPage + 1);
+      return;
+    }
+    await _goToAdjacentChapter(chapters, next: true);
+  }
+
   Future<void> _goToAdjacentChapter(
     List<ChapterRow> chapters, {
     required bool next,
@@ -271,13 +328,6 @@ class _ReaderContentState extends ConsumerState<_ReaderContent> {
     context.pushReplacement('/reader/${widget.bookId}/$targetChapterId');
   }
 
-  bool _hasNextChapter(List<ChapterRow> chapters) {
-    if (chapters.isEmpty) return false;
-    final currentIndex = chapters.indexWhere((ch) => ch.id == widget.chapterId);
-    if (currentIndex < 0) return false;
-    return currentIndex < chapters.length - 1;
-  }
-
   @override
   Widget build(BuildContext context) {
     final chapterInfoAsync = ref.watch(
@@ -290,16 +340,23 @@ class _ReaderContentState extends ConsumerState<_ReaderContent> {
         chapterId: widget.chapterId,
       )),
     );
-    final inlineTitle = chapterInfoAsync.maybeWhen(
-      data: (chapter) {
-        if (chapter == null) return null;
-        final number = chapter.chapterIndex + 1;
-        return '第$number章  ${chapter.title}';
-      },
-      orElse: () => null,
+    final configAsync = ref.watch(readingConfigProvider);
+    final nightMode = configAsync.maybeWhen(
+      data: (config) => config.nightMode,
+      orElse: () => false,
     );
+    final bgColor =
+        nightMode ? _readerBackgroundNight : _readerBackground;
+    final fgColor =
+        nightMode ? _readerForegroundNight : _readerForeground;
+    final chapterTitle = chapterInfoAsync.maybeWhen(
+      data: (chapter) => chapter?.title.trim() ?? '',
+      orElse: () => '',
+    );
+    final inlineTitle = chapterTitle.isEmpty ? null : chapterTitle;
 
     return Scaffold(
+      backgroundColor: bgColor,
       body: contentAsync.when(
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (e, _) => Center(
@@ -317,79 +374,203 @@ class _ReaderContentState extends ConsumerState<_ReaderContent> {
             orElse: () => const <ChapterRow>[],
           );
           final paragraphs = _ReaderFormatter.toParagraphs(content);
-          return SafeArea(
-            bottom: false,
-            child: LayoutBuilder(
-              builder: (context, constraints) {
-                final pageWidth =
-                    constraints.maxWidth - _pagePadding.horizontal;
-                final devicePixelRatio = MediaQuery.devicePixelRatioOf(context);
-                final unsafeBottom = MediaQuery.paddingOf(context).bottom;
-                // 预留一点分页安全高度，避免最后一行落在边界时被裁切。
-                final pageHeight =
-                    constraints.maxHeight -
-                    _pagePadding.vertical -
-                    unsafeBottom -
-                    _paginationSafetyBottom;
-                final textScaler = MediaQuery.textScalerOf(context);
-                final textDirection = Directionality.of(context);
-                _preparePagination(
-                  paragraphs: paragraphs,
-                  inlineTitle: inlineTitle,
-                  maxWidth: pageWidth,
-                  maxHeight: pageHeight,
-                  textScaler: textScaler,
-                  textDirection: textDirection,
-                  devicePixelRatio: devicePixelRatio,
-                );
-                final controller = _pageController;
-                if (controller == null) {
-                  return const Center(child: CircularProgressIndicator());
-                }
-
-                final hasNext = _hasNextChapter(chapters);
-                final pageCount = hasNext ? _pages.length + 1 : _pages.length;
-
-                return PageView.builder(
-                  controller: controller,
-                  scrollDirection: Axis.horizontal,
-                  onPageChanged: (index) {
-                    _currentPage = index;
-                    if (index >= _pages.length) {
-                      _goToAdjacentChapter(chapters, next: true);
-                      return;
+          return Stack(
+            children: [
+              SafeArea(
+                bottom: false,
+                child: LayoutBuilder(
+                  builder: (context, constraints) {
+                    final pageWidth =
+                        constraints.maxWidth - _pagePadding.horizontal;
+                    final devicePixelRatio =
+                        MediaQuery.devicePixelRatioOf(context);
+                    final unsafeBottom = MediaQuery.paddingOf(context).bottom;
+                    // 预留一点分页安全高度，避免最后一行落在边界时被裁切。
+                    final pageHeight =
+                        constraints.maxHeight -
+                        _pagePadding.vertical -
+                        unsafeBottom -
+                        _paginationSafetyBottom;
+                    final textScaler = MediaQuery.textScalerOf(context);
+                    final textDirection = Directionality.of(context);
+                    _preparePagination(
+                      paragraphs: paragraphs,
+                      inlineTitle: inlineTitle,
+                      maxWidth: pageWidth,
+                      maxHeight: pageHeight,
+                      textScaler: textScaler,
+                      textDirection: textDirection,
+                      devicePixelRatio: devicePixelRatio,
+                    );
+                    final controller = _pageController;
+                    if (controller == null) {
+                      return const Center(child: CircularProgressIndicator());
                     }
-                    _savePercent(_percentFromPage(index, _pages.length));
-                  },
-                  itemCount: pageCount,
-                  itemBuilder: (context, index) {
-                    if (index >= _pages.length) {
-                      return const Center(
+
+                    return PageView.builder(
+                      controller: controller,
+                      physics: const NeverScrollableScrollPhysics(),
+                      scrollDirection: Axis.horizontal,
+                      onPageChanged: (index) {
+                        _currentPage = index;
+                        _savePercent(
+                          _percentFromPage(index, _pages.length),
+                        );
+                      },
+                      itemCount: _pages.length,
+                      itemBuilder: (context, index) => Padding(
+                        padding: _pagePadding,
                         child: Text(
-                          '继续阅读下一章',
-                          style: TextStyle(fontSize: 16, color: Colors.grey),
+                          _pages[index],
+                          style: _bodyStyle.copyWith(color: fgColor),
+                          strutStyle: _bodyStrut,
+                          textHeightBehavior: _textHeightBehavior,
                         ),
-                      );
-                    }
-                    return Padding(
-                      padding: _pagePadding,
-                      child: Text(
-                        _pages[index],
-                        style: _bodyStyle,
-                        strutStyle: _bodyStrut,
-                        textHeightBehavior: _textHeightBehavior,
                       ),
                     );
                   },
-                );
-              },
-            ),
+                ),
+              ),
+              Positioned.fill(
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: GestureDetector(
+                        behavior: HitTestBehavior.opaque,
+                        onTap: () =>
+                            _handleZoneTap(_TapZone.left, chapters),
+                      ),
+                    ),
+                    Expanded(
+                      child: GestureDetector(
+                        behavior: HitTestBehavior.opaque,
+                        onTap: () =>
+                            _handleZoneTap(_TapZone.middle, chapters),
+                      ),
+                    ),
+                    Expanded(
+                      child: GestureDetector(
+                        behavior: HitTestBehavior.opaque,
+                        onTap: () =>
+                            _handleZoneTap(_TapZone.right, chapters),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Positioned(
+                top: 0,
+                left: 0,
+                right: 0,
+                child: IgnorePointer(
+                  ignoring: !_menuVisible,
+                  child: AnimatedSlide(
+                    offset:
+                        _menuVisible ? Offset.zero : const Offset(0, -1),
+                    duration: const Duration(milliseconds: 200),
+                    curve: Curves.easeOut,
+                    child: AnimatedOpacity(
+                      opacity: _menuVisible ? 1.0 : 0.0,
+                      duration: const Duration(milliseconds: 180),
+                      child: _buildHeaderBar(
+                        context,
+                        bgColor: bgColor,
+                        fgColor: fgColor,
+                        nightMode: nightMode,
+                        title: inlineTitle ?? '',
+                        config: configAsync.maybeWhen(
+                          data: (c) => c,
+                          orElse: () => null,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ],
           );
         },
       ),
     );
   }
+
+  Widget _buildHeaderBar(
+    BuildContext context, {
+    required Color bgColor,
+    required Color fgColor,
+    required bool nightMode,
+    required String title,
+    required ReadingConfig? config,
+  }) {
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: () => setState(() => _menuVisible = false),
+      child: Container(
+        color: bgColor,
+        child: SafeArea(
+          bottom: false,
+          child: SizedBox(
+            height: kToolbarHeight,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 4),
+              child: Row(
+                children: [
+                  IconButton(
+                    icon: const Icon(Icons.arrow_back),
+                    color: fgColor,
+                    tooltip: '返回',
+                    onPressed: () => context.pop(),
+                  ),
+                  Expanded(
+                    child: Center(
+                      child: Text(
+                        title,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          color: fgColor,
+                          fontSize: 15,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                  ),
+                  IconButton(
+                    icon: Icon(
+                      nightMode
+                          ? Icons.light_mode_outlined
+                          : Icons.dark_mode_outlined,
+                    ),
+                    color: fgColor,
+                    tooltip: nightMode ? '日间模式' : '夜间模式',
+                    onPressed:
+                        config == null ? null : () => _toggleNightMode(config),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _toggleNightMode(ReadingConfig config) async {
+    await ref.read(readingRepositoryProvider).saveReadingConfig(
+          ReadingConfig(
+            fontSize: config.fontSize,
+            lineHeight: config.lineHeight,
+            nightMode: !config.nightMode,
+            brightness: config.brightness,
+          ),
+        );
+    if (!mounted) return;
+    ref.invalidate(readingConfigProvider);
+  }
 }
+
+enum _TapZone { left, middle, right }
 
 class _ReaderFormatter {
   static const String _indent = '\u3000\u3000';

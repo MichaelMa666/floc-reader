@@ -6,12 +6,16 @@ class ParsedLocalBook {
     required this.author,
     required this.description,
     required this.chapters,
+    this.coverBytes,
+    this.coverMediaType,
   });
 
   final String title;
   final String author;
   final String description;
   final List<ParsedLocalChapter> chapters;
+  final Uint8List? coverBytes;
+  final String? coverMediaType;
 }
 
 class ParsedLocalChapter {

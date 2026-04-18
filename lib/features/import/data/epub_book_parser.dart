@@ -36,6 +36,7 @@ class EpubBookParser implements LocalBookParser {
     final metadata = _readMetadata(opfDoc, fileName);
     final manifest = _readManifest(opfDoc, opfDir);
     final spine = _readSpine(opfDoc);
+    final cover = _extractCover(opfDoc, manifest, files);
 
     final sections = <ParsedLocalChapter>[];
     for (var index = 0; index < spine.length; index++) {
@@ -68,7 +69,60 @@ class EpubBookParser implements LocalBookParser {
       author: metadata.author,
       description: metadata.description,
       chapters: chapters,
+      coverBytes: cover?.bytes,
+      coverMediaType: cover?.mediaType,
     );
+  }
+
+  _EpubCover? _extractCover(
+    XmlDocument opfDoc,
+    Map<String, _ManifestItem> manifest,
+    Map<String, ArchiveFile> files,
+  ) {
+    String? coverItemId;
+    for (final element in opfDoc.descendants.whereType<XmlElement>()) {
+      if (element.name.local != 'item') continue;
+      final properties =
+          (element.getAttribute('properties') ?? '').trim().toLowerCase();
+      if (properties.split(RegExp(r'\s+')).contains('cover-image')) {
+        coverItemId = element.getAttribute('id');
+        if (coverItemId != null && coverItemId.isNotEmpty) break;
+      }
+    }
+    if (coverItemId == null) {
+      for (final element in opfDoc.descendants.whereType<XmlElement>()) {
+        if (element.name.local != 'meta') continue;
+        final name = (element.getAttribute('name') ?? '').toLowerCase();
+        if (name == 'cover') {
+          final content = element.getAttribute('content')?.trim();
+          if (content != null && content.isNotEmpty) {
+            coverItemId = content;
+            break;
+          }
+        }
+      }
+    }
+    _ManifestItem? item;
+    if (coverItemId != null && manifest.containsKey(coverItemId)) {
+      item = manifest[coverItemId];
+    }
+    if (item == null) {
+      for (final entry in manifest.entries) {
+        final mediaType = entry.value.mediaType;
+        if (!mediaType.startsWith('image/')) continue;
+        final name = p.posix.basename(entry.value.href).toLowerCase();
+        if (name.contains('cover')) {
+          item = entry.value;
+          break;
+        }
+      }
+    }
+    if (item == null) return null;
+    final file = files[_normalizePath(item.href)];
+    if (file == null) return null;
+    final bytes = Uint8List.fromList(file.content);
+    if (bytes.isEmpty) return null;
+    return _EpubCover(bytes: bytes, mediaType: item.mediaType);
   }
 
   String _readTextFile(Map<String, ArchiveFile> files, String path) {
@@ -635,6 +689,13 @@ class _ManifestItem {
   final String href;
   final String mediaType;
   final String properties;
+}
+
+class _EpubCover {
+  const _EpubCover({required this.bytes, required this.mediaType});
+
+  final Uint8List bytes;
+  final String mediaType;
 }
 
 class _InlineHeadingResult {

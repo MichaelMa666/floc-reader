@@ -3,13 +3,11 @@ class RemoteLibraryBook {
     required this.id,
     required this.file,
     required this.path,
-    required this.category,
   });
 
   final String id;
   final String file;
   final String path;
-  final String category;
 }
 
 class LibrarySyncFailure {

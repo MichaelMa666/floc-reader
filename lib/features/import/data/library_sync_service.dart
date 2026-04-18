@@ -33,7 +33,7 @@ class LibrarySyncService {
 
     for (final book in books) {
       try {
-        final sourceId = 'library:${book.category}:${book.id}';
+        final sourceId = 'library:${book.id}';
         final existsNewSource = await _repository.existsBySourceId(sourceId);
         if (existsNewSource) {
           skippedCount++;
@@ -98,12 +98,7 @@ class LibrarySyncService {
 
     final books = <RemoteLibraryBook>[];
     for (final item in rawBooks) {
-      _collectCatalogBooks(
-        item,
-        books,
-        fallbackBookDir: fallbackBookDir,
-        inheritedCategory: null,
-      );
+      _collectCatalogBooks(item, books, fallbackBookDir: fallbackBookDir);
     }
 
     return books;
@@ -113,11 +108,9 @@ class LibrarySyncService {
     Object? item,
     List<RemoteLibraryBook> output, {
     required String fallbackBookDir,
-    required String? inheritedCategory,
   }) {
     if (item is! Map<String, dynamic>) return;
 
-    // 兼容旧版平铺结构：books: [{ id, file, path }]
     final id = item['id']?.toString().trim() ?? '';
     final file = item['file']?.toString().trim() ?? '';
     if (id.isNotEmpty && file.isNotEmpty) {
@@ -125,27 +118,14 @@ class LibrarySyncService {
       if (path.isEmpty) {
         path = '$fallbackBookDir/$file';
       }
-      final category = _resolveCategory(path, inheritedCategory);
-      output.add(
-        RemoteLibraryBook(id: id, file: file, path: path, category: category),
-      );
+      output.add(RemoteLibraryBook(id: id, file: file, path: path));
       return;
     }
 
-    // 兼容新版分组结构：books: [{ id, name, books: [...] }]
     final nested = item['books'];
-    final groupName = item['name']?.toString().trim();
-    final category = (groupName != null && groupName.isNotEmpty)
-        ? groupName
-        : inheritedCategory;
     if (nested is List) {
       for (final child in nested) {
-        _collectCatalogBooks(
-          child,
-          output,
-          fallbackBookDir: fallbackBookDir,
-          inheritedCategory: category,
-        );
+        _collectCatalogBooks(child, output, fallbackBookDir: fallbackBookDir);
       }
     }
   }
@@ -188,21 +168,6 @@ class LibrarySyncService {
       return p.joinAll(segments.skip(1));
     }
     return p.joinAll(segments);
-  }
-
-  String _resolveCategory(String path, String? inheritedCategory) {
-    if (inheritedCategory != null && inheritedCategory.trim().isNotEmpty) {
-      return inheritedCategory.trim();
-    }
-    final segments = path
-        .replaceAll('\\', '/')
-        .split('/')
-        .where((segment) => segment.trim().isNotEmpty)
-        .toList();
-    if (segments.length >= 3 && segments.first == 'books') {
-      return segments[1];
-    }
-    return '未分类';
   }
 
   String _titleFromFileName(String fileName) {

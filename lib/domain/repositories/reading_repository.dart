@@ -8,6 +8,8 @@ abstract class ReadingRepository {
 
   Future<ReadingProgress?> getReadingProgress(String bookId);
 
+  Future<ReadingProgress?> getLatestReadingProgress();
+
   Future<void> saveReadingProgress(ReadingProgress progress);
 
   Future<Map<String, int>> getChapterReadPercents(String bookId);
