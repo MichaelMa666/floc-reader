@@ -76,7 +76,11 @@ class LibrarySyncService {
   }
 
   Future<List<RemoteLibraryBook>> _fetchCatalogBooks() async {
-    final uri = Uri.parse(catalogUrl);
+    final uri = Uri.parse(catalogUrl).replace(
+      queryParameters: {
+        't': DateTime.now().millisecondsSinceEpoch.toString(),
+      },
+    );
     final response = await _client.get(uri);
     if (response.statusCode != 200) {
       throw HttpException('拉取 catalog 失败，状态码: ${response.statusCode}');
