@@ -140,7 +140,8 @@ class _ReaderContentState extends ConsumerState<_ReaderContent> {
   int _pageFromPercent(int percent, int totalPages) {
     if (totalPages <= 1) return 0;
     final p = percent.clamp(0, 100) / 100.0;
-    return (p * (totalPages - 1)).round().clamp(0, totalPages - 1);
+    // 与 _percentFromPage 互为反函数：保存用 (index+1)/N*100，恢复也用同样基数。
+    return (p * totalPages).round().clamp(1, totalPages) - 1;
   }
 
   List<String> _buildPages({
@@ -280,14 +281,21 @@ class _ReaderContentState extends ConsumerState<_ReaderContent> {
     }
     switch (zone) {
       case _TapZone.left:
-        _goPrevPage(chapters);
+      case _TapZone.right:
+        _goNextPage(chapters);
         break;
       case _TapZone.middle:
         setState(() => _menuVisible = true);
         break;
-      case _TapZone.right:
-        _goNextPage(chapters);
-        break;
+    }
+  }
+
+  void _handleSideSwipe(DragEndDetails details, List<ChapterRow> chapters) {
+    if (_menuVisible) return;
+    final velocity = details.primaryVelocity ?? 0;
+    // 从左向右滑 → 上一页
+    if (velocity > 200) {
+      _goPrevPage(chapters);
     }
   }
 
@@ -435,13 +443,17 @@ class _ReaderContentState extends ConsumerState<_ReaderContent> {
                 child: Row(
                   children: [
                     Expanded(
+                      flex: 3,
                       child: GestureDetector(
                         behavior: HitTestBehavior.opaque,
                         onTap: () =>
                             _handleZoneTap(_TapZone.left, chapters),
+                        onHorizontalDragEnd: (details) =>
+                            _handleSideSwipe(details, chapters),
                       ),
                     ),
                     Expanded(
+                      flex: 2,
                       child: GestureDetector(
                         behavior: HitTestBehavior.opaque,
                         onTap: () =>
@@ -449,10 +461,13 @@ class _ReaderContentState extends ConsumerState<_ReaderContent> {
                       ),
                     ),
                     Expanded(
+                      flex: 3,
                       child: GestureDetector(
                         behavior: HitTestBehavior.opaque,
                         onTap: () =>
                             _handleZoneTap(_TapZone.right, chapters),
+                        onHorizontalDragEnd: (details) =>
+                            _handleSideSwipe(details, chapters),
                       ),
                     ),
                   ],
