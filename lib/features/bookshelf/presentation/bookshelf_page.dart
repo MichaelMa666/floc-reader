@@ -43,6 +43,10 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage> {
     });
   }
 
+  String _entryPathFor(BookRow book) {
+    return book.kind == 'pdf' ? '/pdf/${book.id}' : '/catalog/${book.id}';
+  }
+
   @override
   Widget build(BuildContext context) {
     final booksAsync = ref.watch(bookListProvider);
@@ -92,7 +96,9 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage> {
                 _ContinueReadingBanner(
                   shortcut: shortcut,
                   onTap: () => _openBook(
-                    '/reader/${shortcut.book.id}/${shortcut.progress.chapterId}',
+                    shortcut.book.kind == 'pdf'
+                        ? '/pdf/${shortcut.book.id}'
+                        : '/reader/${shortcut.book.id}/${shortcut.progress.chapterId}',
                   ),
                 ),
               Padding(
@@ -150,7 +156,7 @@ class _BookshelfPageState extends ConsumerState<BookshelfPage> {
                           final book = filteredBooks[index];
                           return _BookGridItem(
                             book: book,
-                            onTap: () => _openBook('/catalog/${book.id}'),
+                            onTap: () => _openBook(_entryPathFor(book)),
                             onToggleFavorite: () => _toggleFavorite(book.id),
                           );
                         },

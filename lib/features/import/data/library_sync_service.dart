@@ -47,14 +47,25 @@ class LibrarySyncService {
           await _downloadBook(book, localFile);
         }
 
-        final bytes = await localFile.readAsBytes();
-        await _repository.importLocalBook(
-          fileName: book.file,
-          bytes: bytes,
-          sourceId: sourceId,
-          stableBookId: 'library_${book.id}',
-          titleOverride: _titleFromFileName(book.file),
-        );
+        final ext = p.extension(book.file).toLowerCase();
+        if (ext == '.pdf') {
+          await _repository.importPdfBook(
+            fileName: book.file,
+            filePath: localFile.path,
+            sourceId: sourceId,
+            stableBookId: 'library_${book.id}',
+            titleOverride: _titleFromFileName(book.file),
+          );
+        } else {
+          final bytes = await localFile.readAsBytes();
+          await _repository.importLocalBook(
+            fileName: book.file,
+            bytes: bytes,
+            sourceId: sourceId,
+            stableBookId: 'library_${book.id}',
+            titleOverride: _titleFromFileName(book.file),
+          );
+        }
         importedCount++;
       } catch (e) {
         failures.add(

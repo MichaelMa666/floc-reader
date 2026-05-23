@@ -12,6 +12,8 @@ class AppDatabase {
     required String author,
     String? coverUrl,
     String description = '',
+    String kind = 'text',
+    String? filePath,
   }) async {
     _books[id] = BookRow(
       id: id,
@@ -20,6 +22,8 @@ class AppDatabase {
       author: author,
       coverUrl: coverUrl,
       description: description,
+      kind: kind,
+      filePath: filePath,
     );
   }
 
@@ -82,6 +86,8 @@ class BookRow {
     required this.author,
     this.coverUrl,
     this.description = '',
+    this.kind = 'text',
+    this.filePath,
   });
 
   final String id;
@@ -90,6 +96,8 @@ class BookRow {
   final String author;
   final String? coverUrl;
   final String description;
+  final String kind;
+  final String? filePath;
 }
 
 class ChapterRow {
