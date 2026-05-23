@@ -20,5 +20,13 @@ abstract class ReadingRepository {
     required int percent,
   });
 
+  Future<Map<String, int>> getChapterPositions(String bookId);
+
+  Future<void> saveChapterPosition({
+    required String bookId,
+    required String chapterId,
+    required int percent,
+  });
+
   Future<void> clearReadingProgress();
 }

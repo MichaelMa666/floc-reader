@@ -30,10 +30,16 @@ class LibrarySyncService {
     var importedCount = 0;
     var skippedCount = 0;
     final failures = <LibrarySyncFailure>[];
+    final validSourceIds = <String>{};
 
     for (final book in books) {
+      // 用 path 派生稳定键：catalog 端重排 book.id 不会污染本地主键。
+      final key = _stableKey(book.path);
+      final sourceId = 'library:$key';
+      final stableBookId = 'library_$key';
+      validSourceIds.add(sourceId);
+
       try {
-        final sourceId = 'library:${book.id}';
         final existsNewSource = await _repository.existsBySourceId(sourceId);
         if (existsNewSource) {
           skippedCount++;
@@ -53,7 +59,7 @@ class LibrarySyncService {
             fileName: book.file,
             filePath: localFile.path,
             sourceId: sourceId,
-            stableBookId: 'library_${book.id}',
+            stableBookId: stableBookId,
             titleOverride: _titleFromFileName(book.file),
           );
         } else {
@@ -62,7 +68,7 @@ class LibrarySyncService {
             fileName: book.file,
             bytes: bytes,
             sourceId: sourceId,
-            stableBookId: 'library_${book.id}',
+            stableBookId: stableBookId,
             titleOverride: _titleFromFileName(book.file),
           );
         }
@@ -78,12 +84,28 @@ class LibrarySyncService {
       }
     }
 
+    // 清理 catalog 已下线或键被重排导致的孤儿 library 记录。
+    await _repository.pruneBooksBySourcePrefix(
+      sourceIdPrefix: 'library:',
+      validSourceIds: validSourceIds,
+    );
+
     return LibrarySyncResult(
       importedCount: importedCount,
       skippedCount: skippedCount,
       failedCount: failures.length,
       failures: failures,
     );
+  }
+
+  /// FNV-1a 32-bit 哈希，纯函数、与 dart 版本/平台无关，足够区分书库规模。
+  String _stableKey(String input) {
+    var hash = 0x811c9dc5;
+    for (final byte in utf8.encode(input)) {
+      hash = (hash ^ byte) & 0xFFFFFFFF;
+      hash = (hash * 0x01000193) & 0xFFFFFFFF;
+    }
+    return hash.toRadixString(16).padLeft(8, '0');
   }
 
   Future<List<RemoteLibraryBook>> _fetchCatalogBooks() async {

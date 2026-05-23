@@ -118,6 +118,33 @@ class BookRepository {
     return books.any((book) => book.sourceId == sourceId);
   }
 
+  /// 删除 sourceId 前缀匹配但不在 valid 集合内的书（书+章节+封面文件）。
+  /// 用于远程书库同步后清理上游已下线 / 已重排键的旧记录。
+  Future<int> pruneBooksBySourcePrefix({
+    required String sourceIdPrefix,
+    required Set<String> validSourceIds,
+  }) async {
+    final books = await db.getAllBooks();
+    var removed = 0;
+    for (final book in books) {
+      if (!book.sourceId.startsWith(sourceIdPrefix)) continue;
+      if (validSourceIds.contains(book.sourceId)) continue;
+      await db.deleteBook(book.id);
+      await _deleteCoverFile(book.coverUrl);
+      removed++;
+    }
+    return removed;
+  }
+
+  Future<void> _deleteCoverFile(String? coverPath) async {
+    if (kIsWeb) return;
+    if (coverPath == null || coverPath.isEmpty) return;
+    final file = File(coverPath);
+    if (await file.exists()) {
+      await file.delete();
+    }
+  }
+
   Future<void> clearLocalCache() async {
     await db.clearAllData();
 

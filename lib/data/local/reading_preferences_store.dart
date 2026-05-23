@@ -9,6 +9,7 @@ class ReadingPreferencesStore {
   static const String _readingConfigKey = 'reading_config';
   static const String _readingProgressPrefix = 'reading_progress_';
   static const String _chapterProgressPrefix = 'chapter_progress_';
+  static const String _chapterPositionPrefix = 'chapter_position_';
 
   Future<ReadingConfig?> getReadingConfig() async {
     final SharedPreferences prefs = await SharedPreferences.getInstance();
@@ -93,11 +94,45 @@ class ReadingPreferencesStore {
     final safePercent = percent.clamp(0, 100);
     final progressMap = await getChapterReadPercents(bookId);
     final existing = progressMap[chapterId] ?? 0;
-    // 只增不减，避免用户回滚到前面导致已读进度倒退。
+    // 只增不减：已读进度（供目录页"已读"指示器）不随回翻倒退。
     progressMap[chapterId] = safePercent > existing ? safePercent : existing;
     await prefs.setString(
       '$_chapterProgressPrefix$bookId',
       jsonEncode(progressMap),
+    );
+  }
+
+  Future<Map<String, int>> getChapterPositions(String bookId) async {
+    final SharedPreferences prefs = await SharedPreferences.getInstance();
+    final String? raw = prefs.getString('$_chapterPositionPrefix$bookId');
+    if (raw == null || raw.trim().isEmpty) {
+      return <String, int>{};
+    }
+    final decoded = jsonDecode(raw);
+    if (decoded is! Map<String, dynamic>) {
+      return <String, int>{};
+    }
+    final result = <String, int>{};
+    decoded.forEach((key, value) {
+      if (key.trim().isEmpty || value is! num) return;
+      result[key] = value.toInt().clamp(0, 100);
+    });
+    return result;
+  }
+
+  Future<void> saveChapterPosition({
+    required String bookId,
+    required String chapterId,
+    required int percent,
+  }) async {
+    final SharedPreferences prefs = await SharedPreferences.getInstance();
+    final safePercent = percent.clamp(0, 100);
+    final map = await getChapterPositions(bookId);
+    // 当前位置：可增可减，返回后从此继续。
+    map[chapterId] = safePercent;
+    await prefs.setString(
+      '$_chapterPositionPrefix$bookId',
+      jsonEncode(map),
     );
   }
 
@@ -108,7 +143,8 @@ class ReadingPreferencesStore {
         .where(
           (key) =>
               key.startsWith(_readingProgressPrefix) ||
-              key.startsWith(_chapterProgressPrefix),
+              key.startsWith(_chapterProgressPrefix) ||
+              key.startsWith(_chapterPositionPrefix),
         )
         .toList();
     for (final key in keysToRemove) {

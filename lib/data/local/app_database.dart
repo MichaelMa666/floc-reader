@@ -192,6 +192,17 @@ class AppDatabase extends GeneratedDatabase {
     );
   }
 
+  Future<void> deleteBook(String id) async {
+    await customStatement(
+      'DELETE FROM chapters WHERE book_id = ?',
+      [id],
+    );
+    await customStatement(
+      'DELETE FROM books WHERE id = ?',
+      [id],
+    );
+  }
+
   Future<void> clearAllData() async {
     await customStatement('DELETE FROM chapters');
     await customStatement('DELETE FROM books');

@@ -70,6 +70,11 @@ class AppDatabase {
     );
   }
 
+  Future<void> deleteBook(String id) async {
+    _chapters.removeWhere((_, ch) => ch.bookId == id);
+    _books.remove(id);
+  }
+
   Future<void> clearAllData() async {
     _chapters.clear();
     _books.clear();

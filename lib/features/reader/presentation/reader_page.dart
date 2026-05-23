@@ -31,7 +31,7 @@ class _ReaderContent extends ConsumerStatefulWidget {
 
 class _ReaderContentState extends ConsumerState<_ReaderContent> {
   static const EdgeInsets _pagePadding = EdgeInsets.fromLTRB(20, 10, 20, 0);
-  static const TextStyle _bodyStyle = TextStyle(fontSize: 18, height: 1.8);
+  static const TextStyle _bodyStyle = TextStyle(fontSize: 20, height: 1.81);
   static const double _paginationSafetyBottom = 0;
   // 柔和护眼的米色底，替代系统默认的纯白。
   static const Color _readerBackground = Color(0xFFF5EFDC);
@@ -39,8 +39,8 @@ class _ReaderContentState extends ConsumerState<_ReaderContent> {
   static const Color _readerBackgroundNight = Color(0xFF1A1A1A);
   static const Color _readerForegroundNight = Color(0xFFC8C8C8);
   static const StrutStyle _bodyStrut = StrutStyle(
-    fontSize: 18,
-    height: 1.8,
+    fontSize: 20,
+    height: 1.81,
     forceStrutHeight: true,
     leading: 0,
   );
@@ -90,30 +90,43 @@ class _ReaderContentState extends ConsumerState<_ReaderContent> {
   }
 
   Future<void> _savePercent(int percent) async {
-    if (percent <= _lastSavedPercent) return;
+    if (percent == _lastSavedPercent) return;
     _lastSavedPercent = percent;
-    await ref
-        .read(readingRepositoryProvider)
-        .saveChapterReadPercent(
-          bookId: widget.bookId,
-          chapterId: widget.chapterId,
-          percent: percent,
-        );
+    final repo = ref.read(readingRepositoryProvider);
+    // 当前位置：每次翻页都覆盖，供下次恢复精确页面。
+    await repo.saveChapterPosition(
+      bookId: widget.bookId,
+      chapterId: widget.chapterId,
+      percent: percent,
+    );
+    // 最大已读：只增不减，供目录页"已读"指示器。
+    await repo.saveChapterReadPercent(
+      bookId: widget.bookId,
+      chapterId: widget.chapterId,
+      percent: percent,
+    );
     ref.invalidate(chapterReadPercentMapProvider(widget.bookId));
   }
 
   Future<void> _loadInitialPercent() async {
     final token = ++_restoreToken;
     final repo = ref.read(readingRepositoryProvider);
-    final map = await repo.getChapterReadPercents(widget.bookId);
+    final positions = await repo.getChapterPositions(widget.bookId);
     if (!mounted || token != _restoreToken) return;
-    final percent = (map[widget.chapterId] ?? 0).clamp(0, 100);
+    int? percent = positions[widget.chapterId];
+    if (percent == null) {
+      // 兼容升级前的历史数据：没有位置记录时退回最大已读点。
+      final legacy = await repo.getChapterReadPercents(widget.bookId);
+      if (!mounted || token != _restoreToken) return;
+      percent = legacy[widget.chapterId] ?? 0;
+    }
+    final safePercent = percent.clamp(0, 100);
     // 记录当前阅读位置，供目录页的历史书签直接跳回。
     await repo.saveReadingProgress(
       ReadingProgress(
         bookId: widget.bookId,
         chapterId: widget.chapterId,
-        offset: percent,
+        offset: safePercent,
         updatedAt: DateTime.now(),
       ),
     );
@@ -121,7 +134,7 @@ class _ReaderContentState extends ConsumerState<_ReaderContent> {
     ref.invalidate(readingProgressProvider(widget.bookId));
     ref.invalidate(lastReadShortcutProvider);
     setState(() {
-      _initialPercent = percent;
+      _initialPercent = safePercent;
       _initialPercentLoaded = true;
     });
   }
@@ -330,7 +343,8 @@ class _ReaderContentState extends ConsumerState<_ReaderContent> {
     if (targetIndex < 0 || targetIndex >= chapters.length) return;
 
     _isChapterNavigating = true;
-    await _savePercent(100);
+    // 跨章时不强制覆盖当前位置：onPageChanged 已经保存了最后一次页面索引。
+    // 前进时上次保存的是末页 (=100)，回退时是首页 (不应被改写成 100)。
     if (!mounted) return;
     final targetChapterId = chapters[targetIndex].id;
     context.pushReplacement('/reader/${widget.bookId}/$targetChapterId');

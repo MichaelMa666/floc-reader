@@ -59,6 +59,24 @@ class ReadingRepositoryImpl implements ReadingRepository {
   }
 
   @override
+  Future<Map<String, int>> getChapterPositions(String bookId) {
+    return _store.getChapterPositions(bookId);
+  }
+
+  @override
+  Future<void> saveChapterPosition({
+    required String bookId,
+    required String chapterId,
+    required int percent,
+  }) {
+    return _store.saveChapterPosition(
+      bookId: bookId,
+      chapterId: chapterId,
+      percent: percent,
+    );
+  }
+
+  @override
   Future<void> clearReadingProgress() {
     return _store.clearReadingProgress();
   }
