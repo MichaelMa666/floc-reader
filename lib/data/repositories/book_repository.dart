@@ -21,6 +21,9 @@ class BookRepository {
   final TxtBookParser _txtParser;
   final EpubBookParser _epubParser;
 
+  static const String pdfKind = 'pdf';
+  static const String textKind = 'text';
+
   /// 导入本地书籍（txt / epub）并写入本地库
   Future<ImportBookResult> importLocalBook({
     required String fileName,
@@ -76,6 +79,37 @@ class BookRepository {
       title: resolvedTitle,
       chapterCount: chapterRows.length,
       totalChars: totalChars,
+    );
+  }
+
+  /// 导入 PDF 书籍：不解析章节，仅登记元数据与本地文件路径。
+  Future<ImportBookResult> importPdfBook({
+    required String fileName,
+    required String filePath,
+    String sourceId = 'local',
+    String? stableBookId,
+    String? titleOverride,
+  }) async {
+    final bookId = stableBookId ?? _buildBookIdFromPath(fileName, filePath);
+    final fallbackTitle = _titleFromFileName(fileName);
+    final resolvedTitle =
+        (titleOverride != null && titleOverride.trim().isNotEmpty)
+        ? titleOverride.trim()
+        : fallbackTitle;
+    await db.upsertBook(
+      id: bookId,
+      sourceId: sourceId,
+      title: resolvedTitle,
+      author: '未知作者',
+      description: '来自本地 PDF 导入',
+      kind: pdfKind,
+      filePath: filePath,
+    );
+    return ImportBookResult(
+      bookId: bookId,
+      title: resolvedTitle,
+      chapterCount: 0,
+      totalChars: 0,
     );
   }
 
@@ -151,6 +185,17 @@ class BookRepository {
       bytes.hashCode,
     ).toUnsigned(32);
     return 'local_${now}_$hash';
+  }
+
+  String _buildBookIdFromPath(String fileName, String filePath) {
+    final now = DateTime.now().millisecondsSinceEpoch;
+    final hash = Object.hash(fileName, filePath).toUnsigned(32);
+    return 'local_${now}_$hash';
+  }
+
+  String _titleFromFileName(String fileName) {
+    final stripped = p.basenameWithoutExtension(fileName).trim();
+    return stripped.isEmpty ? '未命名书籍' : stripped;
   }
 
   /// 本地书籍列表

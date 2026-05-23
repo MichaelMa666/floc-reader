@@ -3,12 +3,14 @@ import 'package:go_router/go_router.dart';
 
 import '../features/bookshelf/presentation/bookshelf_page.dart';
 import '../features/catalog/presentation/catalog_page.dart';
+import '../features/reader/presentation/pdf_reader_page.dart';
 import '../features/reader/presentation/reader_page.dart';
 
 class AppRoutes {
   static const bookshelf = '/';
   static const catalog = '/catalog/:bookId';
   static const reader = '/reader/:bookId/:chapterId';
+  static const pdfReader = '/pdf/:bookId';
 }
 
 final appRouter = GoRouter(
@@ -37,6 +39,14 @@ final appRouter = GoRouter(
         return NoTransitionPage(
           child: ReaderPage(bookId: bookId, chapterId: chapterId),
         );
+      },
+    ),
+    GoRoute(
+      path: AppRoutes.pdfReader,
+      name: 'pdfReader',
+      pageBuilder: (BuildContext context, GoRouterState state) {
+        final bookId = state.pathParameters['bookId']!;
+        return NoTransitionPage(child: PdfReaderPage(bookId: bookId));
       },
     ),
   ],

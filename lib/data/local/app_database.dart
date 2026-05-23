@@ -19,7 +19,7 @@ class AppDatabase extends GeneratedDatabase {
   AppDatabase.forTesting(super.e);
 
   @override
-  int get schemaVersion => 2;
+  int get schemaVersion => 3;
 
   @override
   Iterable<TableInfo<Table, dynamic>> get allTables => [];
@@ -35,6 +35,8 @@ class AppDatabase extends GeneratedDatabase {
           author TEXT NOT NULL,
           cover_url TEXT,
           description TEXT NOT NULL DEFAULT '',
+          kind TEXT NOT NULL DEFAULT 'text',
+          file_path TEXT,
           created_at INTEGER NOT NULL DEFAULT (strftime('%s', 'now'))
         )
       ''');
@@ -80,6 +82,13 @@ class AppDatabase extends GeneratedDatabase {
           )
         ''');
       }
+      if (from < 3) {
+        // v2 → v3: 引入 PDF 等非文本格式所需的元数据列
+        await customStatement(
+          "ALTER TABLE books ADD COLUMN kind TEXT NOT NULL DEFAULT 'text'",
+        );
+        await customStatement('ALTER TABLE books ADD COLUMN file_path TEXT');
+      }
     },
   );
 
@@ -92,10 +101,12 @@ class AppDatabase extends GeneratedDatabase {
     required String author,
     String? coverUrl,
     String description = '',
+    String kind = 'text',
+    String? filePath,
   }) {
     return customInsert(
-      'INSERT OR REPLACE INTO books (id, source_id, title, author, cover_url, description) '
-      'VALUES (?, ?, ?, ?, ?, ?)',
+      'INSERT OR REPLACE INTO books (id, source_id, title, author, cover_url, description, kind, file_path) '
+      'VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
       variables: [
         Variable.withString(id),
         Variable.withString(sourceId),
@@ -103,6 +114,8 @@ class AppDatabase extends GeneratedDatabase {
         Variable.withString(author),
         Variable(coverUrl),
         Variable.withString(description),
+        Variable.withString(kind),
+        Variable(filePath),
       ],
       updates: {},
     );
@@ -195,6 +208,8 @@ class BookRow {
     required this.author,
     this.coverUrl,
     this.description = '',
+    this.kind = 'text',
+    this.filePath,
   });
 
   factory BookRow.fromRow(QueryRow row) {
@@ -205,6 +220,8 @@ class BookRow {
       author: row.read<String>('author'),
       coverUrl: row.readNullable<String>('cover_url'),
       description: row.read<String>('description'),
+      kind: row.readNullable<String>('kind') ?? 'text',
+      filePath: row.readNullable<String>('file_path'),
     );
   }
 
@@ -214,6 +231,8 @@ class BookRow {
   final String author;
   final String? coverUrl;
   final String description;
+  final String kind;
+  final String? filePath;
 }
 
 class ChapterRow {
